@@ -6,7 +6,6 @@
 
 
 **License:** Apache 2.0
-**Status:** v1.0.0 - first public release.
 
 FastAPI framework adapter for [z4j](https://z4j.com). Integrates via
 FastAPI's lifespan hook - one context manager wraps the agent's lifecycle
@@ -14,17 +13,23 @@ with your app's startup and shutdown.
 
 ## Install
 
+Pick your task engine and install with the matching extra. Each extra
+pulls the engine adapter AND its companion scheduler in one shot, so
+a fresh install never needs a second command.
+
 ```bash
-# FastAPI + arq (the most common async-native pairing)
-pip install z4j-fastapi z4j-arq z4j-arqcron
-
-# FastAPI + Celery (when the sync stack is preferred)
-pip install z4j-fastapi z4j-celery z4j-celerybeat
-
-# FastAPI + Dramatiq / RQ / Huey / taskiq - all supported
-pip install z4j-fastapi z4j-dramatiq z4j-apscheduler
-pip install z4j-fastapi z4j-taskiq z4j-taskiqscheduler
+pip install z4j-fastapi[arq]        # arq + arq-cron (async-native, recommended)
+pip install z4j-fastapi[taskiq]     # TaskIQ + taskiq-scheduler (async, broker-flexible)
+pip install z4j-fastapi[celery]     # Celery + celery-beat (sync stack)
+pip install z4j-fastapi[rq]         # RQ + rq-scheduler
+pip install z4j-fastapi[dramatiq]   # Dramatiq + APScheduler
+pip install z4j-fastapi[huey]       # Huey + huey-periodic
+pip install z4j-fastapi[all]        # every engine (CI / kitchen sink)
 ```
+
+`pip install z4j-fastapi` (no extra) installs only the framework adapter.
+That's useful if you already manage engine packages elsewhere; otherwise
+always pick an engine extra.
 
 ## Configure
 
