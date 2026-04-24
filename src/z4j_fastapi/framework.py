@@ -123,6 +123,7 @@ def resolve_config(
     hmac_secret: str | None = None,
     environment: str | None = None,
     transport: str | None = None,
+    agent_id: str | None = None,
     log_level: str | None = None,
     engines: list[str] | None = None,
     schedulers: list[str] | None = None,
@@ -193,6 +194,10 @@ def resolve_config(
     # Optional string fields - kwarg > env > omit (use Config default)
     _maybe_set_str(resolved, "environment", environment, env, "Z4J_ENVIRONMENT")
     _maybe_set_str(resolved, "transport", transport, env, "Z4J_TRANSPORT")
+    # Long-poll agent UUID - required by Config when transport='longpoll'.
+    # Audit 2026-04-24 Medium-2: resolver was missing this field, so
+    # operators switching to long-poll hit silent HMAC mismatches.
+    _maybe_set_str(resolved, "agent_id", agent_id, env, "Z4J_AGENT_ID")
     _maybe_set_str(resolved, "log_level", log_level, env, "Z4J_LOG_LEVEL")
 
     # List fields
@@ -225,11 +230,20 @@ def resolve_config(
     _maybe_set_int(resolved, "buffer_max_bytes", buffer_max_bytes, env, "Z4J_BUFFER_MAX_BYTES")
     _maybe_set_int(resolved, "max_payload_bytes", max_payload_bytes, env, "Z4J_MAX_PAYLOAD_BYTES")
 
-    # Path
+    # Path - clamped to the agent's allowed buffer roots
+    # (``~/.z4j`` / ``$TMPDIR/z4j-{uid}``). Audit 2026-04-24 Low-2.
+    from z4j_bare.storage import clamp_buffer_path
+
+    raw_buffer_path: Path | None = None
     if buffer_path is not None:
-        resolved["buffer_path"] = Path(buffer_path)
+        raw_buffer_path = Path(buffer_path)
     elif "Z4J_BUFFER_PATH" in env:
-        resolved["buffer_path"] = Path(env["Z4J_BUFFER_PATH"])
+        raw_buffer_path = Path(env["Z4J_BUFFER_PATH"])
+    if raw_buffer_path is not None:
+        try:
+            resolved["buffer_path"] = clamp_buffer_path(raw_buffer_path)
+        except ValueError as exc:
+            raise ConfigError(str(exc)) from None
 
     try:
         return Config(**resolved)
