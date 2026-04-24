@@ -1,6 +1,6 @@
 [project]
 name = "z4j-fastapi"
-version = "1.0.2"
+version = "1.0.3"
 description = "z4j FastAPI framework adapter (Apache 2.0)"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -20,8 +20,8 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "z4j-core>=1.0.2",
-    "z4j-bare>=1.0.3",
+    "z4j-core>=1.0.4",
+    "z4j-bare>=1.0.6",
     "fastapi>=0.136.0",
 ]
 
