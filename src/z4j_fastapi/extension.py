@@ -57,6 +57,13 @@ def z4j_lifespan(
     token: str | None = None,
     project_id: str | None = None,
     celery_app: Any = None,
+    rq_app: Any = None,
+    arq_redis_settings: Any = None,
+    arq_function_names: Any = None,
+    arq_queue_name: str | None = None,
+    dramatiq_broker: Any = None,
+    huey: Any = None,
+    taskiq_broker: Any = None,
     hmac_secret: str | None = None,
     environment: str | None = None,
     transport: str | None = None,
@@ -134,10 +141,19 @@ def z4j_lifespan(
     _set_if_not_none(config_kwargs, "buffer_max_bytes", buffer_max_bytes)
     _set_if_not_none(config_kwargs, "max_payload_bytes", max_payload_bytes)
 
+    engine_handles: dict[str, Any] = {}
+    _set_if_not_none(engine_handles, "rq_app", rq_app)
+    _set_if_not_none(engine_handles, "arq_redis_settings", arq_redis_settings)
+    _set_if_not_none(engine_handles, "arq_function_names", arq_function_names)
+    _set_if_not_none(engine_handles, "arq_queue_name", arq_queue_name)
+    _set_if_not_none(engine_handles, "dramatiq_broker", dramatiq_broker)
+    _set_if_not_none(engine_handles, "huey", huey)
+    _set_if_not_none(engine_handles, "taskiq_broker", taskiq_broker)
+
     @asynccontextmanager
     async def _lifespan(app: Any) -> AsyncIterator[None]:
         # Start z4j - wrapped so failures never crash the FastAPI app.
-        runtime = _safe_start(config_kwargs, celery_app)
+        runtime = _safe_start(config_kwargs, celery_app, engine_handles)
 
         try:
             if inner_lifespan is not None:
@@ -159,6 +175,13 @@ def install_z4j(
     token: str | None = None,
     project_id: str | None = None,
     celery_app: Any = None,
+    rq_app: Any = None,
+    arq_redis_settings: Any = None,
+    arq_function_names: Any = None,
+    arq_queue_name: str | None = None,
+    dramatiq_broker: Any = None,
+    huey: Any = None,
+    taskiq_broker: Any = None,
     hmac_secret: str | None = None,
     environment: str | None = None,
     transport: str | None = None,
@@ -236,7 +259,16 @@ def install_z4j(
     _set_if_not_none(config_kwargs, "buffer_max_bytes", buffer_max_bytes)
     _set_if_not_none(config_kwargs, "max_payload_bytes", max_payload_bytes)
 
-    runtime = _safe_start(config_kwargs, celery_app)
+    engine_handles: dict[str, Any] = {}
+    _set_if_not_none(engine_handles, "rq_app", rq_app)
+    _set_if_not_none(engine_handles, "arq_redis_settings", arq_redis_settings)
+    _set_if_not_none(engine_handles, "arq_function_names", arq_function_names)
+    _set_if_not_none(engine_handles, "arq_queue_name", arq_queue_name)
+    _set_if_not_none(engine_handles, "dramatiq_broker", dramatiq_broker)
+    _set_if_not_none(engine_handles, "huey", huey)
+    _set_if_not_none(engine_handles, "taskiq_broker", taskiq_broker)
+
+    runtime = _safe_start(config_kwargs, celery_app, engine_handles)
     if runtime is not None:
         # Stash on the app so middleware/routes can reach the runtime.
         app.state.z4j_runtime = runtime
@@ -284,6 +316,7 @@ def get_runtime() -> AgentRuntime | None:
 def _safe_start(
     config_kwargs: dict[str, Any],
     celery_app: Any,
+    engine_handles: dict[str, Any] | None = None,
 ) -> AgentRuntime | None:
     """Build and start the runtime, catching all errors.
 
@@ -300,7 +333,9 @@ def _safe_start(
         return _runtime  # already started in this process
 
     try:
-        runtime = _build_and_start_runtime(config_kwargs, celery_app)
+        runtime = _build_and_start_runtime(
+            config_kwargs, celery_app, engine_handles,
+        )
     except Exception:  # noqa: BLE001
         logger.exception("z4j: failed to start agent runtime; continuing without it")
         return None
@@ -329,11 +364,30 @@ def _safe_start(
 def _build_and_start_runtime(
     config_kwargs: dict[str, Any],
     celery_app: Any,
+    engine_handles: dict[str, Any] | None = None,
 ) -> AgentRuntime:
-    """Resolve config, discover adapters, build the runtime, start it."""
+    """Resolve config, discover adapters, build the runtime, start it.
+
+    ``engine_handles`` is a dict of optional non-celery engine handles:
+    ``rq_app``, ``arq_redis_settings``, ``arq_function_names``,
+    ``arq_queue_name``, ``dramatiq_broker``, ``huey``, ``taskiq_broker``.
+    Each is forwarded to :func:`discover_engines`. Existing callers
+    that pass only ``celery_app`` still work; ``engine_handles`` is
+    additive.
+    """
     config = resolve_config(**config_kwargs)
     framework = FastAPIFrameworkAdapter(config)
-    engine_list = discover_engines(celery_app)
+    handles = engine_handles or {}
+    engine_list = discover_engines(
+        celery_app,
+        rq_app=handles.get("rq_app"),
+        arq_redis_settings=handles.get("arq_redis_settings"),
+        arq_function_names=handles.get("arq_function_names", ()),
+        arq_queue_name=handles.get("arq_queue_name", "arq:queue"),
+        dramatiq_broker=handles.get("dramatiq_broker"),
+        huey=handles.get("huey"),
+        taskiq_broker=handles.get("taskiq_broker"),
+    )
     scheduler_list = discover_schedulers(celery_app)
 
     runtime = AgentRuntime(

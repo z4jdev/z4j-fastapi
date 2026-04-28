@@ -271,29 +271,62 @@ def resolve_config(
 # ---------------------------------------------------------------------------
 
 
-def discover_engines(celery_app: Any = None) -> list[Any]:
+def discover_engines(
+    celery_app: Any = None,
+    *,
+    rq_app: Any = None,
+    arq_redis_settings: Any = None,
+    arq_function_names: Any = (),
+    arq_queue_name: str = "arq:queue",
+    dramatiq_broker: Any = None,
+    huey: Any = None,
+    taskiq_broker: Any = None,
+) -> list[Any]:
     """Try to import every supported engine adapter and instantiate it.
 
-    If ``celery_app`` is provided explicitly, it is passed straight to
-    the engine adapter. Otherwise, we skip Celery engine discovery -
-    FastAPI does not have a conventional auto-discoverable Celery app
-    like Django does.
+    v1.1.0 supports auto-discovery of all 6 engines: celery, rq, arq,
+    dramatiq, huey, taskiq. FastAPI has no Django-style global app
+    convention so the operator passes the engine handle as a kwarg
+    via ``z4j_lifespan(...)`` / ``install_z4j(...)``. Multiple engines
+    can co-exist in one FastAPI process.
 
-    Failure to import an adapter (because ``z4j-celery`` is not
-    installed) is silent - the user simply gets the engines they
-    pip-installed.
+    Each kwarg is the engine's native object:
+
+    - ``celery_app`` — Celery instance
+    - ``rq_app`` — RQ wrapper (or operator's duck-typed object); see
+      :class:`RqEngineAdapter` docstring for the shape
+    - ``arq_redis_settings`` — arq RedisSettings or pool
+    - ``arq_function_names`` — iterable of registered arq function names
+    - ``dramatiq_broker`` — Dramatiq broker (or None to fall back to
+      ``dramatiq.get_broker()`` IFF actors are registered on it)
+    - ``huey`` — Huey instance
+    - ``taskiq_broker`` — taskiq broker
+
+    Adapters not installed (their package not pip-installed) are
+    skipped silently. Adapters whose handle wasn't passed are skipped
+    silently.
     """
     engines: list[Any] = []
 
-    celery_engine = _try_import_celery_engine(celery_app)
-    if celery_engine is not None:
-        engines.append(celery_engine)
+    for adapter in (
+        _try_import_celery_engine(celery_app),
+        _try_import_rq_engine(rq_app),
+        _try_import_arq_engine(
+            arq_redis_settings, arq_function_names, arq_queue_name,
+        ),
+        _try_import_dramatiq_engine(dramatiq_broker),
+        _try_import_huey_engine(huey),
+        _try_import_taskiq_engine(taskiq_broker),
+    ):
+        if adapter is not None:
+            engines.append(adapter)
 
     if not engines:
         logger.info(
             "z4j: no queue engine adapters discovered; the agent will run "
-            "but will not capture task events. Install z4j-celery and pass "
-            "celery_app= to fix.",
+            "but will not capture task events. Install z4j-celery (or "
+            "z4j-rq / z4j-arq / z4j-dramatiq / z4j-huey / z4j-taskiq) and "
+            "pass the engine handle (celery_app=, rq_app=, etc.) to fix.",
         )
     return engines
 
@@ -343,6 +376,104 @@ def _try_import_celerybeat_scheduler(celery_app: Any) -> Any:
         return None
 
     return CeleryBeatSchedulerAdapter(celery_app=celery_app)
+
+
+def _try_import_rq_engine(rq_app: Any) -> Any:
+    """Best-effort import of :class:`RqEngineAdapter`.
+
+    Returns None if z4j-rq isn't installed or no rq_app was passed.
+    """
+    if rq_app is None:
+        return None
+    try:
+        from z4j_rq.engine import RqEngineAdapter
+    except ImportError:
+        logger.warning(
+            "z4j: rq_app was provided but z4j-rq is not installed; "
+            "pip install z4j-rq to enable RQ integration.",
+        )
+        return None
+    return RqEngineAdapter(rq_app=rq_app)
+
+
+def _try_import_arq_engine(
+    redis_settings: Any,
+    function_names: Any,
+    queue_name: str,
+) -> Any:
+    """Best-effort import of :class:`ArqEngineAdapter`."""
+    if redis_settings is None:
+        return None
+    try:
+        from z4j_arq import ArqEngineAdapter
+    except ImportError:
+        logger.warning(
+            "z4j: arq_redis_settings was provided but z4j-arq is not installed; "
+            "pip install z4j-arq to enable arq integration.",
+        )
+        return None
+    return ArqEngineAdapter(
+        redis_settings=redis_settings,
+        function_names=function_names,
+        queue_name=queue_name,
+    )
+
+
+def _try_import_dramatiq_engine(broker: Any) -> Any:
+    """Best-effort import of :class:`DramatiqEngineAdapter`.
+
+    If ``broker`` is None, falls back to ``dramatiq.get_broker()``
+    IFF at least one actor has been registered on it. Without the
+    actor check we'd pick up dramatiq's auto-created default
+    StubBroker in projects that never opted into Dramatiq.
+    """
+    try:
+        from z4j_dramatiq.engine import DramatiqEngineAdapter
+    except ImportError:
+        return None
+
+    if broker is None:
+        try:
+            import dramatiq
+            candidate = dramatiq.get_broker()
+            actors = getattr(candidate, "actors", None) or {}
+            if actors:
+                broker = candidate
+        except Exception:  # noqa: BLE001
+            return None
+    if broker is None:
+        return None
+    return DramatiqEngineAdapter(broker=broker)
+
+
+def _try_import_huey_engine(huey: Any) -> Any:
+    """Best-effort import of :class:`HueyEngineAdapter`."""
+    if huey is None:
+        return None
+    try:
+        from z4j_huey import HueyEngineAdapter
+    except ImportError:
+        logger.warning(
+            "z4j: huey was provided but z4j-huey is not installed; "
+            "pip install z4j-huey to enable Huey integration.",
+        )
+        return None
+    return HueyEngineAdapter(huey=huey)
+
+
+def _try_import_taskiq_engine(broker: Any) -> Any:
+    """Best-effort import of :class:`TaskiqEngineAdapter`."""
+    if broker is None:
+        return None
+    try:
+        from z4j_taskiq import TaskiqEngineAdapter
+    except ImportError:
+        logger.warning(
+            "z4j: taskiq_broker was provided but z4j-taskiq is not installed; "
+            "pip install z4j-taskiq to enable taskiq integration.",
+        )
+        return None
+    return TaskiqEngineAdapter(broker=broker)
 
 
 def _maybe_set_str(
