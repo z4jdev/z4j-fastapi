@@ -1,27 +1,20 @@
-"""``python -m z4j_fastapi`` - FastAPI-tagged wrapper around z4j-bare's CLI.
+"""``python -m z4j_fastapi`` - module entry point.
 
-Usage::
+Both forms work and dispatch to the same code:
 
-    python -m z4j_fastapi doctor
-    python -m z4j_fastapi doctor --json
+    z4j-fastapi <subcommand>            # pip-installed console script
+    python -m z4j_fastapi <subcommand>  # module form
 
-Subcommands are delegated 1:1 to ``python -m z4j_bare`` which
-already understands ``Z4J_*`` env vars and runs the same probe
-ladder. The wrapper exists for ergonomic parity with z4j-django's
-``manage.py z4j_doctor`` and z4j-flask's ``python -m z4j_flask
-doctor``.
-
-Future work: expose ``--app PATH:VAR`` to import the FastAPI app
-and read any framework-side overrides (rare; most operators just
-use env vars).
+The module form is what containerized deploys typically use;
+the console-script form is what humans type. Both supported in
+1.1.2+.
 """
 
 from __future__ import annotations
 
 import sys
 
-from z4j_bare.cli import main
-
+from z4j_fastapi.cli import main
 
 if __name__ == "__main__":
     sys.exit(main(sys.argv[1:]))
