@@ -43,6 +43,10 @@ class FastAPIFrameworkAdapter:
 
     name: str = "fastapi"
 
+    #: Worker-first protocol (1.2.0+) role hint. FastAPI agents run
+    #: under uvicorn / hypercorn / gunicorn-worker; default "web".
+    default_worker_role: str = "web"
+
     def __init__(self, config: Config) -> None:
         self._config = config
         self._startup_hooks: list[Callable[[], None]] = []
