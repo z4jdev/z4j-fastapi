@@ -28,6 +28,7 @@ important than our observability tool.
 
 from __future__ import annotations
 
+import asyncio
 import atexit
 import logging
 import os
@@ -80,6 +81,12 @@ def z4j_lifespan(
     buffer_max_bytes: int | None = None,
     max_payload_bytes: int | None = None,
     inner_lifespan: Callable[..., Any] | None = None,
+    z4j_schedules: dict[str, dict[str, Any]] | None = None,
+    celery_beat_schedules: dict[str, dict[str, Any]] | None = None,
+    reconcile_autorun: bool = False,
+    reconcile_default_engine: str = "celery",
+    reconcile_owner: str | None = None,
+    reconcile_source_tag: str = "declarative:fastapi",
 ) -> Callable[..., AsyncIterator[None]]:
     """Return a lifespan context manager that starts and stops z4j.
 
@@ -154,6 +161,29 @@ def z4j_lifespan(
     async def _lifespan(app: Any) -> AsyncIterator[None]:
         # Start z4j - wrapped so failures never crash the FastAPI app.
         runtime = _safe_start(config_kwargs, celery_app, engine_handles)
+
+        # Optional declarative reconcile on startup. Best-effort:
+        # failures here never block the app.
+        #
+        # Audit fix CRIT-6: ``_safe_reconcile`` uses sync
+        # ``httpx.Client`` (the shared reconciler is sync because
+        # Django + Flask call into it synchronously). Calling it
+        # directly here would block the asyncio event loop for the
+        # duration of the brain round-trip. ``asyncio.to_thread``
+        # runs it in a thread-pool worker so uvicorn / gunicorn
+        # boot is unblocked even when the brain is slow.
+        if reconcile_autorun:
+            await asyncio.to_thread(
+                _safe_reconcile,
+                brain_url=brain_url,
+                api_key=token,
+                project_slug=project_id,
+                z4j_schedules=z4j_schedules,
+                celery_beat_schedules=celery_beat_schedules,
+                engine=reconcile_default_engine,
+                scheduler=reconcile_owner,
+                source=reconcile_source_tag,
+            )
 
         try:
             if inner_lifespan is not None:
@@ -419,6 +449,59 @@ def _safe_stop(runtime: AgentRuntime | None) -> None:
 def _atexit_stop() -> None:
     """``atexit`` handler that flushes the buffer and stops the runtime."""
     _safe_stop(_runtime)
+
+
+def _safe_reconcile(
+    *,
+    brain_url: str | None,
+    api_key: str | None,
+    project_slug: str | None,
+    z4j_schedules: dict[str, Any] | None,
+    celery_beat_schedules: dict[str, Any] | None,
+    engine: str,
+    scheduler: str | None,
+    source: str,
+) -> None:
+    """Run :func:`reconcile_schedules` and log the result.
+
+    Best-effort: any failure (missing config, brain unreachable,
+    HTTP error) is logged at WARNING/ERROR but never propagates.
+    The reconciler is auxiliary infrastructure - the FastAPI app
+    must keep starting even if the brain is down.
+    """
+    if not (z4j_schedules or celery_beat_schedules):
+        return
+    if not (brain_url and api_key and project_slug):
+        logger.warning(
+            "z4j-fastapi reconcile: schedules supplied but "
+            "brain_url/token/project_id missing; skipping.",
+        )
+        return
+
+    from z4j_fastapi.declarative import reconcile_schedules
+
+    try:
+        result = reconcile_schedules(
+            brain_url=brain_url,
+            api_key=api_key,
+            project_slug=project_slug,
+            z4j_schedules=z4j_schedules,
+            celery_beat_schedules=celery_beat_schedules,
+            engine=engine,
+            scheduler=scheduler,
+            source=source,
+        )
+    except Exception:  # noqa: BLE001
+        logger.exception("z4j-fastapi: reconcile autorun failed")
+        return
+    if result is None:
+        return
+    logger.info(
+        "z4j-fastapi: reconcile autorun: inserted=%d updated=%d "
+        "unchanged=%d deleted=%d failed=%d",
+        result.inserted, result.updated, result.unchanged,
+        result.deleted, result.failed,
+    )
 
 
 def _set_if_not_none(d: dict[str, Any], key: str, value: Any) -> None:

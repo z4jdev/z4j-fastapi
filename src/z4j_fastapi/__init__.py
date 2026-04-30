@@ -23,6 +23,7 @@ Licensed under Apache License 2.0.
 
 from __future__ import annotations
 
+from z4j_fastapi.declarative import reconcile_schedules
 from z4j_fastapi.extension import get_runtime, install_z4j, z4j_lifespan
 from z4j_fastapi.framework import FastAPIFrameworkAdapter
 
@@ -42,12 +43,13 @@ try:
 except ImportError:
     pass
 
-__version__ = "1.1.0"
+__version__ = "1.3.0"
 
 __all__ = [
     "FastAPIFrameworkAdapter",
     "__version__",
     "get_runtime",
     "install_z4j",
+    "reconcile_schedules",
     "z4j_lifespan",
 ]
