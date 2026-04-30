@@ -165,7 +165,7 @@ class TestDiscoverEnginesFanOut:
     def test_no_engines_passed_returns_empty(self) -> None:
         # Without any engine handle, discovery yields an empty list
         # (or a single dramatiq adapter if a previous test polluted
-        # the global broker — see TestDramatiq.test_global_broker_skipped).
+        # the global broker, see TestDramatiq.test_global_broker_skipped).
         engines = discover_engines()
         # Acceptable shapes: empty, or only DramatiqEngineAdapter.
         names = {type(e).__name__ for e in engines}

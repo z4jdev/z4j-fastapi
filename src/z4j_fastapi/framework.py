@@ -296,15 +296,15 @@ def discover_engines(
 
     Each kwarg is the engine's native object:
 
-    - ``celery_app`` — Celery instance
-    - ``rq_app`` — RQ wrapper (or operator's duck-typed object); see
+    - ``celery_app``, Celery instance
+    - ``rq_app``, RQ wrapper (or operator's duck-typed object); see
       :class:`RqEngineAdapter` docstring for the shape
-    - ``arq_redis_settings`` — arq RedisSettings or pool
-    - ``arq_function_names`` — iterable of registered arq function names
-    - ``dramatiq_broker`` — Dramatiq broker (or None to fall back to
+    - ``arq_redis_settings``, arq RedisSettings or pool
+    - ``arq_function_names``, iterable of registered arq function names
+    - ``dramatiq_broker``, Dramatiq broker (or None to fall back to
       ``dramatiq.get_broker()`` IFF actors are registered on it)
-    - ``huey`` — Huey instance
-    - ``taskiq_broker`` — taskiq broker
+    - ``huey``, Huey instance
+    - ``taskiq_broker``, taskiq broker
 
     Adapters not installed (their package not pip-installed) are
     skipped silently. Adapters whose handle wasn't passed are skipped

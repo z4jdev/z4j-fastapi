@@ -244,7 +244,7 @@ class TestLifespanAutorun:
         async with lifespan(app=None):
             pass
 
-        # No HTTP call — reconcile_autorun defaulted to False.
+        # No HTTP call, reconcile_autorun defaulted to False.
         assert "url" not in captured
 
     @pytest.mark.asyncio
