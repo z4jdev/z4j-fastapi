@@ -1,8 +1,8 @@
 # z4j-fastapi
 
-[![PyPI version](https://img.shields.io/pypi/v/z4j-fastapi.svg)](https://pypi.org/project/z4j-fastapi/)
-[![Python](https://img.shields.io/pypi/pyversions/z4j-fastapi.svg)](https://pypi.org/project/z4j-fastapi/)
-[![License](https://img.shields.io/pypi/l/z4j-fastapi.svg)](https://github.com/z4jdev/z4j-fastapi/blob/main/LICENSE)
+[![PyPI version](https://img.shields.io/pypi/v/z4j-fastapi.svg?v=1.4.0)](https://pypi.org/project/z4j-fastapi/)
+[![Python](https://img.shields.io/pypi/pyversions/z4j-fastapi.svg?v=1.4.0)](https://pypi.org/project/z4j-fastapi/)
+[![License](https://img.shields.io/pypi/l/z4j-fastapi.svg?v=1.4.0)](https://github.com/z4jdev/z4j-fastapi/blob/main/LICENSE)
 
 The FastAPI framework adapter for [z4j](https://z4j.com).
 
