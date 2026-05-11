@@ -46,7 +46,7 @@ from z4j_bare.declarative import (
     _z4j_native_schedules_to_specs,
 )
 
-logger = logging.getLogger("z4j.agent.fastapi.reconcile")
+logger = logging.getLogger("z4j.host.fastapi.reconcile")
 
 
 def reconcile_schedules(
@@ -78,9 +78,8 @@ def reconcile_schedules(
 
     The :func:`z4j_lifespan` integration with
     ``reconcile_autorun=True`` already wraps via
-    ``asyncio.to_thread`` (audit fix CRIT-6, round 1). Direct
-    callers in deploy scripts / CI that run synchronously can
-    invoke this function as-is.
+    ``asyncio.to_thread``. Direct callers in deploy scripts /
+    CI that run synchronously can invoke this function as-is.
 
     Returns ``None`` when no schedules are passed (silent no-op
     so we don't spam logs from a host that doesn't use the feature).

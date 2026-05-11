@@ -46,7 +46,7 @@ from z4j_fastapi.framework import (
     resolve_config,
 )
 
-logger = logging.getLogger("z4j.agent.fastapi.extension")
+logger = logging.getLogger("z4j.host.fastapi.extension")
 
 # Module-level state - there is at most one runtime per process.
 _runtime: AgentRuntime | None = None
@@ -165,8 +165,8 @@ def z4j_lifespan(
         # Optional declarative reconcile on startup. Best-effort:
         # failures here never block the app.
         #
-        # Audit fix CRIT-6: ``_safe_reconcile`` uses sync
-        # ``httpx.Client`` (the shared reconciler is sync because
+        # ``_safe_reconcile`` uses sync ``httpx.Client`` (the
+        # shared reconciler is sync because
         # Django + Flask call into it synchronously). Calling it
         # directly here would block the asyncio event loop for the
         # duration of the brain round-trip. ``asyncio.to_thread``
@@ -304,7 +304,7 @@ def install_z4j(
         app.state.z4j_runtime = runtime
         atexit.register(_atexit_stop)
 
-        # Audit H16: also hook the FastAPI shutdown event so SIGTERM
+        # Also hook the FastAPI shutdown event so SIGTERM
         # under uvicorn / gunicorn / k8s gets a clean stop with
         # buffer flush. The handler is best-effort; an exception
         # here must never block the ASGI shutdown.

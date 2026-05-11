@@ -25,7 +25,7 @@ from typing import Any
 from z4j_core.errors import ConfigError
 from z4j_core.models import Config, DiscoveryHints, RequestContext, User
 
-logger = logging.getLogger("z4j.agent.fastapi.framework")
+logger = logging.getLogger("z4j.host.fastapi.framework")
 
 
 class FastAPIFrameworkAdapter:
@@ -149,125 +149,41 @@ def resolve_config(
     2. ``Z4J_*`` environment variables
     3. Defaults declared on :class:`z4j_core.models.Config`
 
+    1.5: this function previously held ~140 lines of duplicate env-var
+    parsing. The unified resolver in :mod:`z4j_core.config.resolver`
+    now does the work; this is a thin shim that gathers FastAPI's
+    explicit kwargs into the resolver's expected shape.
+
     Raises:
         ConfigError: Required values are missing or invalid.
     """
-    from pydantic import ValidationError
+    from z4j_core.config import resolve_agent_config
 
-    env = os.environ
-    resolved: dict[str, Any] = {}
-
-    # Required fields - explicit kwarg takes priority over env var.
-    # Use ``is not None`` so an operator who passes an explicit
-    # empty string fails the non-empty required-field check below
-    # instead of silently sliding onto the env fallback. A falsy
-    # ``or`` would have treated ``brain_url=""`` the same as
-    # ``brain_url=None`` (not passed) - surfaced by audit pass 8
-    # 2026-04-21.
-    r_brain_url = brain_url if brain_url is not None else env.get("Z4J_BRAIN_URL")
-    r_token = token if token is not None else env.get("Z4J_TOKEN")
-    r_project_id = project_id if project_id is not None else env.get("Z4J_PROJECT_ID")
-
-    missing: list[str] = []
-    if not r_brain_url:
-        missing.append("brain_url (or Z4J_BRAIN_URL)")
-    if not r_token:
-        missing.append("token (or Z4J_TOKEN)")
-    if not r_project_id:
-        missing.append("project_id (or Z4J_PROJECT_ID)")
-    if missing:
-        raise ConfigError(
-            "missing required Z4J settings: " + ", ".join(missing),
-            details={"missing": missing},
-        )
-
-    resolved["brain_url"] = r_brain_url
-    resolved["token"] = r_token
-    resolved["project_id"] = r_project_id
-
-    # HMAC secret - same ``is not None`` discipline as the
-    # required fields. Explicit ``hmac_secret=""`` means the
-    # caller is deliberately opting out; we do not quietly
-    # rescue with an env fallback.
-    r_hmac_secret = (
-        hmac_secret if hmac_secret is not None else env.get("Z4J_HMAC_SECRET")
+    explicit_kwargs: dict[str, Any] = {
+        "brain_url": brain_url,
+        "token": token,
+        "project_id": project_id,
+        "hmac_secret": hmac_secret,
+        "environment": environment,
+        "transport": transport,
+        "agent_id": agent_id,
+        "log_level": log_level,
+        "engines": engines,
+        "schedulers": schedulers,
+        "tags": tags,
+        "dev_mode": dev_mode,
+        "strict_mode": strict_mode,
+        "autostart": autostart,
+        "heartbeat_seconds": heartbeat_seconds,
+        "buffer_path": buffer_path,
+        "buffer_max_events": buffer_max_events,
+        "buffer_max_bytes": buffer_max_bytes,
+        "max_payload_bytes": max_payload_bytes,
+    }
+    return resolve_agent_config(
+        framework_name="fastapi",
+        explicit_kwargs=explicit_kwargs,
     )
-    if r_hmac_secret:
-        resolved["hmac_secret"] = r_hmac_secret
-
-    # Optional string fields - kwarg > env > omit (use Config default)
-    _maybe_set_str(resolved, "environment", environment, env, "Z4J_ENVIRONMENT")
-    _maybe_set_str(resolved, "transport", transport, env, "Z4J_TRANSPORT")
-    # Long-poll agent UUID - required by Config when transport='longpoll'.
-    # Audit 2026-04-24 Medium-2: resolver was missing this field, so
-    # operators switching to long-poll hit silent HMAC mismatches.
-    _maybe_set_str(resolved, "agent_id", agent_id, env, "Z4J_AGENT_ID")
-    _maybe_set_str(resolved, "log_level", log_level, env, "Z4J_LOG_LEVEL")
-
-    # List fields
-    if engines is not None:
-        resolved["engines"] = engines
-    elif "Z4J_ENGINES" in env:
-        resolved["engines"] = [
-            x.strip() for x in env["Z4J_ENGINES"].split(",") if x.strip()
-        ]
-
-    if schedulers is not None:
-        resolved["schedulers"] = schedulers
-    elif "Z4J_SCHEDULERS" in env:
-        resolved["schedulers"] = [
-            x.strip() for x in env["Z4J_SCHEDULERS"].split(",") if x.strip()
-        ]
-
-    # Tags
-    if tags is not None:
-        resolved["tags"] = tags
-
-    # Booleans
-    _maybe_set_bool(resolved, "dev_mode", dev_mode, env, "Z4J_DEV_MODE")
-    _maybe_set_bool(resolved, "strict_mode", strict_mode, env, "Z4J_STRICT_MODE")
-    _maybe_set_bool(resolved, "autostart", autostart, env, "Z4J_AUTOSTART")
-
-    # Integers
-    _maybe_set_int(resolved, "heartbeat_seconds", heartbeat_seconds, env, "Z4J_HEARTBEAT_SECONDS")
-    _maybe_set_int(resolved, "buffer_max_events", buffer_max_events, env, "Z4J_BUFFER_MAX_EVENTS")
-    _maybe_set_int(resolved, "buffer_max_bytes", buffer_max_bytes, env, "Z4J_BUFFER_MAX_BYTES")
-    _maybe_set_int(resolved, "max_payload_bytes", max_payload_bytes, env, "Z4J_MAX_PAYLOAD_BYTES")
-
-    # Path - clamped to the agent's allowed buffer roots
-    # (``~/.z4j`` / ``$TMPDIR/z4j-{uid}``). Audit 2026-04-24 Low-2.
-    from z4j_bare.storage import clamp_buffer_path
-
-    raw_buffer_path: Path | None = None
-    if buffer_path is not None:
-        raw_buffer_path = Path(buffer_path)
-    elif "Z4J_BUFFER_PATH" in env:
-        raw_buffer_path = Path(env["Z4J_BUFFER_PATH"])
-    if raw_buffer_path is not None:
-        try:
-            resolved["buffer_path"] = clamp_buffer_path(raw_buffer_path)
-        except ValueError as exc:
-            raise ConfigError(str(exc)) from None
-
-    try:
-        return Config(**resolved)
-    except ValidationError as exc:
-        # Redact values from the error message (same pattern as Django adapter).
-        details = [
-            {
-                "loc": ".".join(str(p) for p in err["loc"]),
-                "type": err["type"],
-            }
-            for err in exc.errors()
-        ]
-        raise ConfigError(
-            f"invalid Z4J configuration ({len(details)} field(s))",
-            details={"errors": details},
-        ) from None
-    except (TypeError, ValueError) as exc:
-        raise ConfigError(
-            f"invalid Z4J configuration: {type(exc).__name__}",
-        ) from None
 
 
 # ---------------------------------------------------------------------------
@@ -478,48 +394,6 @@ def _try_import_taskiq_engine(broker: Any) -> Any:
         )
         return None
     return TaskiqEngineAdapter(broker=broker)
-
-
-def _maybe_set_str(
-    resolved: dict[str, Any],
-    key: str,
-    kwarg_value: str | None,
-    env: os._Environ[str] | dict[str, str],
-    env_key: str,
-) -> None:
-    if kwarg_value is not None:
-        resolved[key] = kwarg_value
-    elif env_key in env:
-        resolved[key] = env[env_key]
-
-
-def _maybe_set_bool(
-    resolved: dict[str, Any],
-    key: str,
-    kwarg_value: bool | None,
-    env: os._Environ[str] | dict[str, str],
-    env_key: str,
-) -> None:
-    if kwarg_value is not None:
-        resolved[key] = kwarg_value
-    elif env_key in env:
-        resolved[key] = env[env_key].strip().lower() in ("1", "true", "yes", "on")
-
-
-def _maybe_set_int(
-    resolved: dict[str, Any],
-    key: str,
-    kwarg_value: int | None,
-    env: os._Environ[str] | dict[str, str],
-    env_key: str,
-) -> None:
-    if kwarg_value is not None:
-        resolved[key] = kwarg_value
-    elif env_key in env:
-        try:
-            resolved[key] = int(env[env_key])
-        except ValueError as exc:
-            raise ConfigError(f"{env_key} must be an integer: {exc}") from exc
 
 
 __all__ = [
