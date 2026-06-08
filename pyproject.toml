@@ -1,9 +1,9 @@
 [project]
 name = "z4j-fastapi"
-version = "1.6.0"
+version = "1.6.7"
 description = "z4j FastAPI framework adapter (Apache 2.0)"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.10"
 license = { text = "Apache-2.0" }
 authors = [{ name = "z4j contributors" }]
 keywords = ["z4j", "fastapi", "celery", "task"]
@@ -13,6 +13,7 @@ classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
@@ -30,7 +31,15 @@ dependencies = [
     # 1.1.2 floor: supervisor forever-retry + pidfile/SIGHUP for
     # ``z4j-fastapi restart``.
     "z4j-bare>=1.4.0,<2",
-    "fastapi>=0.136.0",
+    # FastAPI compatibility policy: operator-chosen primary, wide
+    # range. Adapter surface is tiny: FastAPI(lifespan=...),
+    # add_event_handler('shutdown', ...), app.state attribute
+    # storage. ``lifespan`` kwarg stable since 0.93 (Jan 2023); 0.95
+    # is a small buffer for early-lifespan edge cases while admitting
+    # essentially the entire modern install base. The >=0.136.0 floor
+    # excluded the long tail of stable services on 0.95-0.115 for no
+    # functional reason.
+    "fastapi>=0.95",
 ]
 
 [project.optional-dependencies]
