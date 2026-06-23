@@ -29,7 +29,6 @@ important than our observability tool.
 from __future__ import annotations
 
 import asyncio
-import atexit
 import logging
 import os
 from collections.abc import AsyncIterator, Callable
@@ -302,7 +301,12 @@ def install_z4j(
     if runtime is not None:
         # Stash on the app so middleware/routes can reach the runtime.
         app.state.z4j_runtime = runtime
-        atexit.register(_atexit_stop)
+        # threading._register_atexit phase (before concurrent.futures
+        # executor teardown) so the runtime drains while the executor
+        # is still live; falls back to plain atexit if unavailable.
+        from z4j_bare.control import register_shutdown_atexit
+
+        register_shutdown_atexit(_atexit_stop)
 
         # Also hook the FastAPI shutdown event so SIGTERM
         # under uvicorn / gunicorn / k8s gets a clean stop with
