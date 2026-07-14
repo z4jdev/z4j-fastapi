@@ -9,20 +9,18 @@ caught fast.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, ClassVar
 
 import pytest
-
 from z4j_fastapi.framework import (
-    discover_engines,
     _try_import_arq_engine,
     _try_import_celery_engine,
     _try_import_dramatiq_engine,
     _try_import_huey_engine,
     _try_import_rq_engine,
     _try_import_taskiq_engine,
+    discover_engines,
 )
-
 
 # ---------------------------------------------------------------------------
 # Celery (regression: must still work via the new fan-out path)
@@ -48,10 +46,16 @@ class TestRq:
 
         class _FakeRqApp:
             connection = None
-            queues: list[Any] = []
-            def queue_for_name(self, name): return None  # noqa: ARG002
-            def queue_for(self, job): return None  # noqa: ARG002
-            def fetch_job(self, tid): return None  # noqa: ARG002
+            queues: ClassVar[list[Any]] = []
+
+            def queue_for_name(self, name):
+                return None
+
+            def queue_for(self, job):
+                return None
+
+            def fetch_job(self, tid):
+                return None
 
         fake = _FakeRqApp()
         adapter = _try_import_rq_engine(fake)
@@ -90,9 +94,11 @@ class TestDramatiq:
         pytest.importorskip("dramatiq")
 
         class _FakeBroker:
-            actors: dict[str, Any] = {}
-            def add_middleware(self, mw): ...  # noqa: ARG002
-            def get_actor(self, name): raise KeyError(name)  # noqa: ARG002
+            actors: ClassVar[dict[str, Any]] = {}
+
+            def add_middleware(self, mw): ...
+            def get_actor(self, name):
+                raise KeyError(name)
 
         b = _FakeBroker()
         adapter = _try_import_dramatiq_engine(b)

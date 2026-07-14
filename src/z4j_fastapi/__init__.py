@@ -13,16 +13,19 @@ Typical usage (lifespan, recommended)::
     from fastapi import FastAPI
     from z4j_fastapi import z4j_lifespan
 
-    app = FastAPI(lifespan=z4j_lifespan(
-        brain_url="http://localhost:7700",
-        token="your-token",
-    ))
+    app = FastAPI(
+        lifespan=z4j_lifespan(
+            brain_url="http://localhost:7700",
+            token="your-token",
+        )
+    )
 
 Licensed under Apache License 2.0.
 """
 
 from __future__ import annotations
 
+import contextlib
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as _pkg_version
 
@@ -41,10 +44,8 @@ from z4j_fastapi.framework import FastAPIFrameworkAdapter
 # FastAPI workers are first-class citizens in the agent registry.
 # If z4j_celery is not installed, the import is silently skipped
 # and nothing changes.
-try:
-    import z4j_celery  # noqa: F401  (imported for its side-effects)
-except ImportError:
-    pass
+with contextlib.suppress(ImportError):
+    import z4j_celery
 
 # Report the installed wheel version (drift-proof - tracks the
 # pyproject version automatically). Falls back to the z4j-core

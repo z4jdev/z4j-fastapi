@@ -13,12 +13,11 @@ import json
 
 import httpx
 import pytest
-
 from z4j_bare.declarative import ScheduleReconciler
 from z4j_fastapi.declarative import reconcile_schedules
 
 
-def _make_handler(captured: dict) -> "callable":
+def _make_handler(captured: dict) -> callable:
     def handler(request: httpx.Request) -> httpx.Response:
         captured["url"] = str(request.url)
         captured["body"] = json.loads(request.content)
@@ -60,12 +59,15 @@ def _patch_http(monkeypatch: pytest.MonkeyPatch, handler) -> None:
 class TestReconcileSchedules:
     def test_no_schedules_returns_none(self) -> None:
         result = reconcile_schedules(
-            brain_url="http://b", api_key="k", project_slug="proj",
+            brain_url="http://b",
+            api_key="k",
+            project_slug="proj",
         )
         assert result is None
 
     def test_native_schedules_post_to_import(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         captured: dict = {}
         _patch_http(monkeypatch, _make_handler(captured))
@@ -90,7 +92,8 @@ class TestReconcileSchedules:
         assert captured["body"]["source_filter"] == "declarative:fastapi"
 
     def test_celery_beat_schedules(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         captured: dict = {}
         _patch_http(monkeypatch, _make_handler(captured))
@@ -108,7 +111,8 @@ class TestReconcileSchedules:
         assert captured["body"]["schedules"][0]["expression"] == "60"
 
     def test_dry_run_calls_diff(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         captured: dict = {}
 
@@ -140,7 +144,8 @@ class TestReconcileSchedules:
         assert "/schedules:diff" in captured["url"]
 
     def test_custom_source_tag_used(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         captured: dict = {}
         _patch_http(monkeypatch, _make_handler(captured))
@@ -158,7 +163,8 @@ class TestReconcileSchedules:
         assert captured["body"]["schedules"][0]["source"] == "my-deploy-script"
 
     def test_scheduler_owner_override(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         captured: dict = {}
         _patch_http(monkeypatch, _make_handler(captured))
@@ -172,9 +178,7 @@ class TestReconcileSchedules:
             },
             scheduler="z4j-scheduler-staging",
         )
-        assert captured["body"]["schedules"][0]["scheduler"] == (
-            "z4j-scheduler-staging"
-        )
+        assert captured["body"]["schedules"][0]["scheduler"] == ("z4j-scheduler-staging")
 
 
 # ---------------------------------------------------------------------------
@@ -185,7 +189,8 @@ class TestReconcileSchedules:
 class TestLifespanAutorun:
     @pytest.mark.asyncio
     async def test_autorun_calls_reconcile(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         # Disable the agent runtime entirely so we only exercise
         # the reconcile path.
@@ -218,7 +223,8 @@ class TestLifespanAutorun:
 
     @pytest.mark.asyncio
     async def test_autorun_off_by_default(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """Without reconcile_autorun, no HTTP call is made."""
         monkeypatch.setenv("Z4J_DISABLED", "1")
@@ -309,6 +315,4 @@ class TestLifespanAutorun:
             pass
 
         # Skipping was logged.
-        assert any(
-            "missing" in r.message.lower() for r in caplog.records
-        )
+        assert any("missing" in r.message.lower() for r in caplog.records)

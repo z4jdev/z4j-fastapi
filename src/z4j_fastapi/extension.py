@@ -7,11 +7,13 @@ Provides two usage patterns for wiring z4j into a FastAPI application:
     from fastapi import FastAPI
     from z4j_fastapi import z4j_lifespan
 
-    app = FastAPI(lifespan=z4j_lifespan(
-        brain_url="http://localhost:7700",
-        token="your-token",
-        celery_app=celery_app,
-    ))
+    app = FastAPI(
+        lifespan=z4j_lifespan(
+            brain_url="http://localhost:7700",
+            token="your-token",
+            celery_app=celery_app,
+        )
+    )
 
 **Pattern 2 - manual install**::
 
@@ -95,11 +97,13 @@ def z4j_lifespan(
     If the application already has its own lifespan, pass it as
     ``inner_lifespan`` and z4j will wrap it::
 
-        app = FastAPI(lifespan=z4j_lifespan(
-            brain_url="...",
-            token="...",
-            inner_lifespan=my_existing_lifespan,
-        ))
+        app = FastAPI(
+            lifespan=z4j_lifespan(
+                brain_url="...",
+                token="...",
+                inner_lifespan=my_existing_lifespan,
+            )
+        )
 
     Args:
         brain_url: URL of the z4j brain.
@@ -315,19 +319,18 @@ def install_z4j(
         async def _on_app_shutdown() -> None:
             try:
                 _safe_stop(runtime)
-            except Exception:  # noqa: BLE001
+            except Exception:
                 logger.exception(
                     "z4j: error during FastAPI shutdown handler",
                 )
 
         try:
             app.add_event_handler("shutdown", _on_app_shutdown)
-        except Exception:  # noqa: BLE001
+        except Exception:
             # Some FastAPI subclasses or test doubles may not
             # support add_event_handler. Fall back to atexit only.
             logger.debug(
-                "z4j: app.add_event_handler unavailable, "
-                "atexit-only shutdown",
+                "z4j: app.add_event_handler unavailable, atexit-only shutdown",
             )
 
     return runtime
@@ -362,15 +365,17 @@ def _safe_start(
         logger.info("z4j: Z4J_DISABLED is set; skipping agent startup")
         return None
 
-    global _runtime
+    global _runtime  # noqa: PLW0603  module-level singleton lazy-init
     if _runtime is not None:
         return _runtime  # already started in this process
 
     try:
         runtime = _build_and_start_runtime(
-            config_kwargs, celery_app, engine_handles,
+            config_kwargs,
+            celery_app,
+            engine_handles,
         )
-    except Exception:  # noqa: BLE001
+    except Exception:
         logger.exception("z4j: failed to start agent runtime; continuing without it")
         return None
 
@@ -379,13 +384,14 @@ def _safe_start(
     # Whoever registered first keeps the live WebSocket; we drop our
     # freshly-built runtime if we lost the race.
     from z4j_bare._process_singleton import try_register
+
     active = try_register(runtime, owner="z4j_fastapi.extension")
     if active is not runtime:
         # We built + started a runtime, then lost the race. Stop
         # the local copy so we don't leak a zombie WS connection.
         try:
             runtime.stop(timeout=2.0)
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.exception("z4j: error stopping duplicate runtime")
         _runtime = active
         return active
@@ -438,12 +444,12 @@ def _build_and_start_runtime(
 
 def _safe_stop(runtime: AgentRuntime | None) -> None:
     """Stop the runtime, swallowing errors. Never raises."""
-    global _runtime
+    global _runtime  # noqa: PLW0603  module-level singleton lazy-init
     if runtime is None:
         return
     try:
         runtime.stop(timeout=5.0)
-    except Exception:  # noqa: BLE001
+    except Exception:
         logger.exception("z4j: error during shutdown")
     finally:
         if _runtime is runtime:
@@ -495,16 +501,18 @@ def _safe_reconcile(
             scheduler=scheduler,
             source=source,
         )
-    except Exception:  # noqa: BLE001
+    except Exception:
         logger.exception("z4j-fastapi: reconcile autorun failed")
         return
     if result is None:
         return
     logger.info(
-        "z4j-fastapi: reconcile autorun: inserted=%d updated=%d "
-        "unchanged=%d deleted=%d failed=%d",
-        result.inserted, result.updated, result.unchanged,
-        result.deleted, result.failed,
+        "z4j-fastapi: reconcile autorun: inserted=%d updated=%d unchanged=%d deleted=%d failed=%d",
+        result.inserted,
+        result.updated,
+        result.unchanged,
+        result.deleted,
+        result.failed,
     )
 
 

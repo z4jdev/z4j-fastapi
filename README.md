@@ -1,21 +1,21 @@
 # z4j-fastapi
 
-[![PyPI version](https://img.shields.io/pypi/v/z4j-fastapi.svg?v=1.6.9)](https://pypi.org/project/z4j-fastapi/)
-[![Python](https://img.shields.io/pypi/pyversions/z4j-fastapi.svg?v=1.6.9)](https://pypi.org/project/z4j-fastapi/)
-[![License](https://img.shields.io/pypi/l/z4j-fastapi.svg?v=1.6.9)](https://github.com/z4jdev/z4j-fastapi/blob/main/LICENSE)
+[![PyPI version](https://img.shields.io/pypi/v/z4j-fastapi.svg?v=1.7.0)](https://pypi.org/project/z4j-fastapi/)
+[![Python](https://img.shields.io/pypi/pyversions/z4j-fastapi.svg?v=1.7.0)](https://pypi.org/project/z4j-fastapi/)
+[![License](https://img.shields.io/pypi/l/z4j-fastapi.svg?v=1.7.0)](https://github.com/z4jdev/z4j-fastapi/blob/main/LICENSE)
 
 The FastAPI framework adapter for [z4j](https://z4j.com).
 
-Adds the z4j agent into your FastAPI app via a single `add_z4j(app)`
-call. Auto-discovers the engine adapter you have installed (Celery,
-RQ, Dramatiq, Huey, arq, TaskIQ) and streams every task lifecycle
-event to z4j. Operator control actions flow back the same
-channel.
+Adds the z4j agent into your FastAPI app via a single
+`z4j_lifespan(...)` passed to `FastAPI(lifespan=...)`. Auto-discovers
+the engine adapter you have installed (Celery, RQ, Dramatiq, Huey,
+arq, TaskIQ) and streams every task lifecycle event to z4j. Operator
+control actions flow back the same channel.
 
 ## Compatibility
 
 - FastAPI 0.95+ (no upper cap)
-- Python 3.10+
+- Python 3.11+
 
 Pair with an engine adapter (`z4j-celery`, `z4j-rq`, `z4j-dramatiq`, `z4j-huey`, `z4j-arq`, `z4j-taskiq`); each engine adapter carries its own upstream floor.
 
@@ -23,14 +23,15 @@ Full per-adapter matrix at <https://z4j.dev/reference/compatibility/>.
 
 ## What it ships
 
-- **One-line install**, `add_z4j(app)` and the agent connects on the
-  next uvicorn worker boot
+- **One-line install**, pass `z4j_lifespan(...)` to
+  `FastAPI(lifespan=...)` and the agent connects on the next uvicorn
+  worker boot
 - **Engine auto-discovery**, picks up whichever z4j engine adapter
   is installed alongside; cross-stack combos (FastAPI + arq,
   FastAPI + Celery) are first-class
 - **`@z4j_meta` decorator**, optional per-task annotations
-  (`priority="critical"`, `description="..."`) for dashboard
-  filtering and SLO display
+  (`priority="critical"`, `tags=["billing"]`, `deadline_ms=5000`) for
+  dashboard filtering and SLO display
 - **Service-user safe**, auto-relocates the local outbound buffer
   to `$TMPDIR/z4j-{uid}` when `$HOME` is unwritable (uvicorn under
   a service account, distroless images, etc.)
@@ -45,11 +46,17 @@ Wire it into your app:
 
 ```python
 from fastapi import FastAPI
-from z4j_fastapi import add_z4j
+from z4j_fastapi import z4j_lifespan
 
-app = FastAPI()
-add_z4j(app)  # reads Z4J_AGENT_TOKEN, Z4J_BRAIN_URL, Z4J_PROJECT from env
+# reads Z4J_TOKEN, Z4J_BRAIN_URL, Z4J_PROJECT_ID from env
+app = FastAPI(lifespan=z4j_lifespan())
 ```
+
+Pass explicit config as kwargs
+(`z4j_lifespan(brain_url=..., token=..., project_id=...)`) instead of
+env vars if you prefer. Apps that already own their lifespan can wrap
+it via `inner_lifespan=`; apps that cannot use lifespan at all can
+call `install_z4j(app)` instead.
 
 Mint the agent token from the dashboard's Agents page.
 

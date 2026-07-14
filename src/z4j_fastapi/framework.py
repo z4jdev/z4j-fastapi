@@ -17,12 +17,10 @@ Configuration comes from either:
 from __future__ import annotations
 
 import logging
-import os
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from z4j_core.errors import ConfigError
 from z4j_core.models import Config, DiscoveryHints, RequestContext, User
 
 logger = logging.getLogger("z4j.host.fastapi.framework")
@@ -80,7 +78,7 @@ class FastAPIFrameworkAdapter:
     def on_shutdown(self, hook: Callable[[], None]) -> None:
         self._shutdown_hooks.append(hook)
 
-    def register_admin_view(self, view: Any) -> None:  # noqa: ARG002
+    def register_admin_view(self, view: Any) -> None:
         # No-op. FastAPI does not have a built-in admin panel.
         return None
 
@@ -98,7 +96,7 @@ class FastAPIFrameworkAdapter:
         for hook in self._startup_hooks:
             try:
                 hook()
-            except Exception:  # noqa: BLE001
+            except Exception:
                 logger.exception("z4j fastapi startup hook failed")
 
     def fire_shutdown(self) -> None:
@@ -110,7 +108,7 @@ class FastAPIFrameworkAdapter:
         for hook in self._shutdown_hooks:
             try:
                 hook()
-            except Exception:  # noqa: BLE001
+            except Exception:
                 logger.exception("z4j fastapi shutdown hook failed")
 
 
@@ -232,7 +230,9 @@ def discover_engines(
         _try_import_celery_engine(celery_app),
         _try_import_rq_engine(rq_app),
         _try_import_arq_engine(
-            arq_redis_settings, arq_function_names, arq_queue_name,
+            arq_redis_settings,
+            arq_function_names,
+            arq_queue_name,
         ),
         _try_import_dramatiq_engine(dramatiq_broker),
         _try_import_huey_engine(huey),
@@ -355,11 +355,12 @@ def _try_import_dramatiq_engine(broker: Any) -> Any:
     if broker is None:
         try:
             import dramatiq
+
             candidate = dramatiq.get_broker()
             actors = getattr(candidate, "actors", None) or {}
             if actors:
                 broker = candidate
-        except Exception:  # noqa: BLE001
+        except Exception:
             return None
     if broker is None:
         return None

@@ -14,9 +14,7 @@ intended to honour.
 from __future__ import annotations
 
 import pytest
-
 from z4j_core.errors import ConfigError
-
 from z4j_fastapi.framework import resolve_config
 
 
@@ -44,7 +42,8 @@ class TestRequiredFieldsFailFast:
     """
 
     def test_empty_brain_url_does_not_fall_back_to_env(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.setenv("Z4J_BRAIN_URL", "http://env-url:7700")
         monkeypatch.setenv("Z4J_TOKEN", "env-token")
@@ -53,29 +52,36 @@ class TestRequiredFieldsFailFast:
             resolve_config(brain_url="", token="t", project_id="p")
 
     def test_empty_token_does_not_fall_back_to_env(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.setenv("Z4J_BRAIN_URL", "http://env-url:7700")
         monkeypatch.setenv("Z4J_TOKEN", "env-token")
         monkeypatch.setenv("Z4J_PROJECT_ID", "env-project")
         with pytest.raises(ConfigError, match="token"):
             resolve_config(
-                brain_url="http://u", token="", project_id="p",
+                brain_url="http://u",
+                token="",
+                project_id="p",
             )
 
     def test_empty_project_id_does_not_fall_back_to_env(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.setenv("Z4J_BRAIN_URL", "http://env-url:7700")
         monkeypatch.setenv("Z4J_TOKEN", "env-token")
         monkeypatch.setenv("Z4J_PROJECT_ID", "env-project")
         with pytest.raises(ConfigError, match="project_id"):
             resolve_config(
-                brain_url="http://u", token="t", project_id="",
+                brain_url="http://u",
+                token="t",
+                project_id="",
             )
 
     def test_all_three_empty_lists_all_missing(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         # The original bug: resolve_config(brain_url='', token='',
         # project_id='') silently built a config from Z4J_* env
@@ -99,7 +105,8 @@ class TestNoneKwargFallsBackToEnv:
     the documented precedence rule and must continue to hold."""
 
     def test_none_brain_url_uses_env(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.setenv("Z4J_BRAIN_URL", "http://env-url:7700")
         monkeypatch.setenv("Z4J_TOKEN", "env-token")
@@ -112,7 +119,8 @@ class TestNoneKwargFallsBackToEnv:
         assert config.project_id == "env-project"
 
     def test_mixed_none_kwarg_and_explicit_kwarg(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         # brain_url passed explicitly, other two via env.
         monkeypatch.setenv("Z4J_TOKEN", "env-token")
@@ -127,7 +135,8 @@ class TestKwargOverridesEnv:
     """Explicit non-empty kwargs always win over env vars."""
 
     def test_kwarg_brain_url_beats_env(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.setenv("Z4J_BRAIN_URL", "http://env-url:7700")
         config = resolve_config(
@@ -148,7 +157,8 @@ class TestEmptyHmacSecret:
     """
 
     def test_empty_hmac_secret_does_not_use_env(
-        self, monkeypatch: pytest.MonkeyPatch,
+        self,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         monkeypatch.setenv("Z4J_HMAC_SECRET", "env-secret-do-not-use")
         config = resolve_config(
