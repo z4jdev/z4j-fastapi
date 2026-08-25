@@ -89,9 +89,10 @@ class FastAPIFrameworkAdapter:
     def fire_startup(self) -> None:
         """Invoke every registered startup hook in order.
 
-        Called once after the agent runtime has connected. Exceptions
-        from individual hooks are caught and logged so a single bad
-        hook does not abort the others.
+        Called after ``AgentRuntime.start()`` reaches local steady state.
+        The WebSocket may still be connecting in the background. Exceptions
+        from individual hooks are caught and logged so a single bad hook does
+        not abort the others.
         """
         for hook in self._startup_hooks:
             try:
@@ -387,14 +388,26 @@ def _try_import_taskiq_engine(broker: Any) -> Any:
     if broker is None:
         return None
     try:
-        from z4j_taskiq import TaskiqEngineAdapter
+        from z4j_taskiq import TaskiqEngineAdapter, attach_to_broker
     except ImportError:
         logger.warning(
             "z4j: taskiq_broker was provided but z4j-taskiq is not installed; "
             "pip install z4j-taskiq to enable taskiq integration.",
         )
         return None
-    return TaskiqEngineAdapter(broker=broker)
+    # A running ASGI loop does not prove it owns this broker. Attach before
+    # host startup and let Taskiq's middleware lifecycle capture the real
+    # owner; commands fail closed until then.
+    adapter = TaskiqEngineAdapter(broker=broker)
+    try:
+        attach_to_broker(broker, adapter=adapter)
+    except RuntimeError as exc:
+        logger.warning(
+            "z4j: taskiq broker attachment failed (%s); skipping adapter",
+            type(exc).__name__,
+        )
+        return None
+    return adapter
 
 
 __all__ = [

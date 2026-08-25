@@ -11,6 +11,8 @@ Provides two usage patterns for wiring z4j into a FastAPI application:
         lifespan=z4j_lifespan(
             brain_url="http://localhost:7700",
             token="your-token",
+            project_id="your-project",
+            hmac_secret="your-hmac-secret",
             celery_app=celery_app,
         )
     )
@@ -21,11 +23,18 @@ Provides two usage patterns for wiring z4j into a FastAPI application:
     from z4j_fastapi import install_z4j
 
     app = FastAPI()
-    install_z4j(app, brain_url="http://localhost:7700", token="your-token")
+    install_z4j(
+        app,
+        brain_url="http://localhost:7700",
+        token="your-token",
+        project_id="your-project",
+        hmac_secret="your-hmac-secret",
+    )
 
-Both patterns wrap all z4j work in try/except so that a failure inside
-z4j never crashes the FastAPI application. The host app is more
-important than our observability tool.
+Both patterns isolate expected z4j startup and shutdown failures so an
+observability outage does not normally stop the FastAPI application. This is
+not a universal exception boundary: process-lifecycle exceptions and failures
+from the application's own composed lifespan still propagate.
 """
 
 from __future__ import annotations
@@ -91,7 +100,8 @@ def z4j_lifespan(
 ) -> Callable[..., AsyncIterator[None]]:
     """Return a lifespan context manager that starts and stops z4j.
 
-    This is the recommended integration pattern for FastAPI >= 0.135.
+    This is the recommended integration pattern for supported FastAPI
+    releases (the package floor is FastAPI 0.109.1).
     Pass the return value directly to ``FastAPI(lifespan=...)``.
 
     If the application already has its own lifespan, pass it as
@@ -108,7 +118,7 @@ def z4j_lifespan(
     Args:
         brain_url: URL of the z4j brain.
         token: Project-scoped bearer token.
-        project_id: Project slug (default ``"default"``).
+        project_id: Required project slug, unless supplied by environment.
         celery_app: The Celery application instance, if using Celery.
         hmac_secret: Shared HMAC secret for command verification.
         environment: Environment label (e.g. ``"production"``).
@@ -118,7 +128,8 @@ def z4j_lifespan(
         schedulers: Scheduler adapter names to register.
         tags: Per-deployment tags.
         dev_mode: Enable development mode.
-        strict_mode: Fail fast on config problems.
+        strict_mode: Accepted for configuration compatibility. This
+            integration still isolates startup errors from the host app.
         autostart: Whether the runtime starts automatically.
         heartbeat_seconds: Heartbeat interval.
         buffer_path: On-disk SQLite buffer path.
@@ -162,7 +173,7 @@ def z4j_lifespan(
 
     @asynccontextmanager
     async def _lifespan(app: Any) -> AsyncIterator[None]:
-        # Start z4j - wrapped so failures never crash the FastAPI app.
+        # Start z4j through the integration's ordinary-exception boundary.
         runtime = _safe_start(config_kwargs, celery_app, engine_handles)
 
         # Optional declarative reconcile on startup. Best-effort:
@@ -243,8 +254,9 @@ def install_z4j(
     is what fires under uvicorn / gunicorn's graceful SIGTERM
     handling (i.e. K8s rolling restarts); ``atexit`` is the
     fallback for processes that exit without ASGI lifespan
-    teardown. Either path runs the same ``runtime.stop(...)`` so
-    buffered events flush before the process dies.
+    teardown. Either path runs the same ``runtime.stop(...)``. Pending
+    events are preserved in the on-disk buffer for the next process start;
+    shutdown does not guarantee delivery before exit.
 
     Args:
         app: The FastAPI application instance. Stored on ``app.state.z4j_runtime``
@@ -261,7 +273,8 @@ def install_z4j(
         schedulers: Scheduler adapter names.
         tags: Per-deployment tags.
         dev_mode: Enable development mode.
-        strict_mode: Fail fast on config problems.
+        strict_mode: Accepted for configuration compatibility. This
+            integration still isolates startup errors from the host app.
         autostart: Whether the runtime starts automatically.
         heartbeat_seconds: Heartbeat interval.
         buffer_path: On-disk SQLite buffer path.
@@ -305,16 +318,16 @@ def install_z4j(
     if runtime is not None:
         # Stash on the app so middleware/routes can reach the runtime.
         app.state.z4j_runtime = runtime
-        # threading._register_atexit phase (before concurrent.futures
-        # executor teardown) so the runtime drains while the executor
-        # is still live; falls back to plain atexit if unavailable.
+        # Register before concurrent.futures executor teardown so runtime
+        # shutdown can finish cleanly; fall back to plain atexit if needed.
         from z4j_bare.control import register_shutdown_atexit
 
         register_shutdown_atexit(_atexit_stop)
 
         # Also hook the FastAPI shutdown event so SIGTERM
-        # under uvicorn / gunicorn / k8s gets a clean stop with
-        # buffer flush. The handler is best-effort; an exception
+        # under uvicorn / gunicorn / k8s gets a clean stop. Unsent entries
+        # remain in the durable buffer for the next start. The handler is
+        # best-effort; an exception
         # here must never block the ASGI shutdown.
         async def _on_app_shutdown() -> None:
             try:
@@ -339,8 +352,7 @@ def install_z4j(
 def get_runtime() -> AgentRuntime | None:
     """Return the running agent runtime, if any.
 
-    Used by tests and by application code that wants to flush the
-    buffer manually or check the runtime state.
+    Used by tests and application code that wants to inspect runtime state.
     """
     return _runtime
 
@@ -381,8 +393,8 @@ def _safe_start(
 
     # Cooperate with other in-process install paths (e.g. a Celery
     # worker_init signal in the same process also tries to install).
-    # Whoever registered first keeps the live WebSocket; we drop our
-    # freshly-built runtime if we lost the race.
+    # Whoever registered first owns capture and transport for this process;
+    # we drop our freshly-built runtime if we lost the race.
     from z4j_bare._process_singleton import try_register
 
     active = try_register(runtime, owner="z4j_fastapi.extension")
@@ -457,7 +469,7 @@ def _safe_stop(runtime: AgentRuntime | None) -> None:
 
 
 def _atexit_stop() -> None:
-    """``atexit`` handler that flushes the buffer and stops the runtime."""
+    """Stop the runtime; unsent entries remain durable for the next start."""
     _safe_stop(_runtime)
 
 

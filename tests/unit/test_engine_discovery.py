@@ -9,6 +9,7 @@ caught fast.
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any, ClassVar
 
 import pytest
@@ -155,11 +156,45 @@ class TestTaskiq:
         pytest.importorskip("z4j_taskiq")
         pytest.importorskip("taskiq")
         from taskiq import InMemoryBroker
+        from z4j_taskiq import Z4JTaskiqMiddleware, attach_to_broker
 
         b = InMemoryBroker()
         adapter = _try_import_taskiq_engine(b)
         assert adapter is not None
         assert adapter.broker is b
+        assert adapter._broker_loop is None
+        middleware = next(item for item in b.middlewares if isinstance(item, Z4JTaskiqMiddleware))
+        assert attach_to_broker(b, adapter=adapter) is middleware
+        assert b.middlewares.count(middleware) == 1
+
+    @pytest.mark.asyncio
+    async def test_async_discovery_defers_to_taskiq_broker_startup(self) -> None:
+        pytest.importorskip("z4j_taskiq")
+        pytest.importorskip("taskiq")
+        from taskiq import InMemoryBroker
+        from z4j_taskiq import Z4JTaskiqMiddleware
+
+        b = InMemoryBroker()
+        adapter = _try_import_taskiq_engine(b)
+
+        assert adapter is not None
+        assert adapter._broker_loop is None
+        middleware = next(item for item in b.middlewares if isinstance(item, Z4JTaskiqMiddleware))
+        await middleware.startup()
+        assert adapter._broker_loop is asyncio.get_running_loop()
+
+    def test_conflicting_existing_middleware_skips_adapter(self) -> None:
+        pytest.importorskip("z4j_taskiq")
+        pytest.importorskip("taskiq")
+        from taskiq import InMemoryBroker
+        from z4j_taskiq import TaskiqEngineAdapter, attach_to_broker
+
+        broker = InMemoryBroker()
+        existing = TaskiqEngineAdapter(broker=broker)
+        middleware = attach_to_broker(broker, adapter=existing)
+
+        assert _try_import_taskiq_engine(broker) is None
+        assert broker.middlewares == [middleware]
 
 
 # ---------------------------------------------------------------------------

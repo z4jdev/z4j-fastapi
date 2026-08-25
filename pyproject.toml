@@ -1,6 +1,6 @@
 [project]
 name = "z4j-fastapi"
-version = "1.8.0"
+version = "1.9.0"
 description = "z4j FastAPI framework adapter (Apache 2.0)"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -26,19 +26,15 @@ dependencies = [
     # instead of failing at the agent. Operators on brain 1.1.0
     # + scheduler 1.1.0 with z4j-fastapi 1.0.x had every scheduled
     # task silently fail; this floor refuses that mixed install.
-    "z4j-core>=1.8.0,<2",
+    "z4j-core>=1.9.0,<2",
     # 1.1.2 floor: supervisor forever-retry + pidfile/SIGHUP for
     # ``z4j-fastapi restart``.
-    "z4j-bare>=1.8.0,<2",
-    # FastAPI compatibility policy: operator-chosen primary, wide
-    # range. Adapter surface is tiny: FastAPI(lifespan=...),
-    # add_event_handler('shutdown', ...), app.state attribute
-    # storage. ``lifespan`` kwarg stable since 0.93 (Jan 2023); 0.95
-    # is a small buffer for early-lifespan edge cases while admitting
-    # essentially the entire modern install base. The >=0.136.0 floor
-    # excluded the long tail of stable services on 0.95-0.115 for no
-    # functional reason.
-    "fastapi>=0.95",
+    "z4j-bare>=1.9.0,<2",
+    # z4j-core requires Pydantic 2, so FastAPI 0.100 established the
+    # compatibility baseline. The published floor is 0.109.1, the first
+    # release that also closes CVE-2024-24762; its real lifespan path is
+    # covered by the adapter floor suite.
+    "fastapi>=0.109.1",
 ]
 
 [project.optional-dependencies]
@@ -46,21 +42,21 @@ dependencies = [
 # the engine adapter AND its companion scheduler in one shot.
 # arq is the most common pairing for async FastAPI stacks; celery
 # remains supported for sync stacks.
-celery   = ["z4j-celery>=1.8.0,<2",   "z4j-celerybeat>=1.8.0,<2"]
+celery   = ["z4j-celery>=1.9.0,<2",   "z4j-celerybeat>=1.9.0,<2"]
 # R9 H-2: z4j-rq floor lifted to >=1.6.7; see z4j umbrella for rationale.
-rq       = ["z4j-rq>=1.8.0,<2",       "z4j-rqscheduler>=1.8.0,<2"]
-dramatiq = ["z4j-dramatiq>=1.8.0,<2", "z4j-apscheduler>=1.8.0,<2"]
-huey     = ["z4j-huey>=1.8.0,<2",     "z4j-hueyperiodic>=1.8.0,<2"]
-arq      = ["z4j-arq>=1.8.0,<2",      "z4j-arqcron>=1.8.0,<2"]
-taskiq   = ["z4j-taskiq>=1.8.0,<2",   "z4j-taskiqscheduler>=1.8.0,<2"]
+rq       = ["z4j-rq>=1.9.0,<2",       "z4j-rqscheduler>=1.9.0,<2"]
+dramatiq = ["z4j-dramatiq>=1.9.0,<2", "z4j-apscheduler>=1.9.0,<2"]
+huey     = ["z4j-huey>=1.9.0,<2",     "z4j-hueyperiodic>=1.9.0,<2"]
+arq      = ["z4j-arq>=1.9.0,<2",      "z4j-arqcron>=1.9.0,<2"]
+taskiq   = ["z4j-taskiq>=1.9.0,<2",   "z4j-taskiqscheduler>=1.9.0,<2"]
 # Every engine in one shot.
 all = [
-    "z4j-celery>=1.8.0,<2",   "z4j-celerybeat>=1.8.0,<2",
-    "z4j-rq>=1.8.0,<2",       "z4j-rqscheduler>=1.8.0,<2",  # R9 H-2 floor
-    "z4j-dramatiq>=1.8.0,<2", "z4j-apscheduler>=1.8.0,<2",
-    "z4j-huey>=1.8.0,<2",     "z4j-hueyperiodic>=1.8.0,<2",
-    "z4j-arq>=1.8.0,<2",      "z4j-arqcron>=1.8.0,<2",
-    "z4j-taskiq>=1.8.0,<2",   "z4j-taskiqscheduler>=1.8.0,<2",
+    "z4j-celery>=1.9.0,<2",   "z4j-celerybeat>=1.9.0,<2",
+    "z4j-rq>=1.9.0,<2",       "z4j-rqscheduler>=1.9.0,<2",  # R9 H-2 floor
+    "z4j-dramatiq>=1.9.0,<2", "z4j-apscheduler>=1.9.0,<2",
+    "z4j-huey>=1.9.0,<2",     "z4j-hueyperiodic>=1.9.0,<2",
+    "z4j-arq>=1.9.0,<2",      "z4j-arqcron>=1.9.0,<2",
+    "z4j-taskiq>=1.9.0,<2",   "z4j-taskiqscheduler>=1.9.0,<2",
 ]
 
 [project.scripts]
@@ -77,7 +73,7 @@ Issues = "https://github.com/z4jdev/z4j-fastapi/issues"
 Source = "https://github.com/z4jdev/z4j-fastapi"
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling==1.32.0"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
